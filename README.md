@@ -1,6 +1,6 @@
-# SecDev Course Template
+# Idea Backlog
 
-Стартовый шаблон для студенческого репозитория (HSE SecDev 2025).
+Idea Backlog (HSE SecDev 2025).
 
 ## Быстрый старт
 ```bash
