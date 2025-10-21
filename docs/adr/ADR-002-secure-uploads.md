@@ -1,6 +1,5 @@
 # ADR-002: Безопасная загрузка изображений (magic bytes, лимиты, UUID-имя)
 Дата: 2025-10-21
-Статус: Accepted
 
 ## Context
 Нужна безопасная обработка пользовательских загрузок: защита от DoS (большие файлы), от подмены формата (MIME spoofing), от path traversal и записи через симлинки. Формат загрузки - изображения PNG/JPEG.
@@ -36,8 +35,8 @@
 4. Документировать ограничения форматов и размера в README/Swagger.
 
 ## Links
-- NFR: **NFR-03 «Валидация входных данных»**, **NFR-07 «Журналы операций (write)»**, **NFR-08 «Rate limiting для write»** - `../security-nfr/NFR.md`
-- Threat model: потоки **F1 (Client -> API)**, **F3 (API -> файловое хранилище/FS)**; риск **R1 «poisoning/DoS при загрузке»** - `../threat-model/DFD.md`, `../threat-model/RISKS.md`, `../threat-model/STRIDE.md`
-- Код: `../../app/security/upload_secure.py`
-- Тесты: `../../tests/test_secure_upload.py`
+- NFR: `docs/security-nfr/NFR.md`
+- Threat model: `docs/threat-model/DFD.md`, `docs/threat-model/RISKS.md`, `docs/threat-model/STRIDE.md`
+- Код: `app/security/upload_secure.py`
+- Тесты: `tests/test_secure_upload.py`
 - PR: ветка `p05-secure-coding`
