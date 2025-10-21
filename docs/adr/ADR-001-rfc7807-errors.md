@@ -31,11 +31,11 @@
 1. Включить хендлеры в `app/main.py` (инициализация приложения).
 2. Прогнать существующие тесты на 404/422 и негативные кейсы.
 3. Застолбить контракт в `tests/test_rfc7807.py` и добавить проверки в CI.
-4. Запретить прямую отдачу «сырых» ответов в код-ревью.
+4. Запретить прямую отдачу сырых ответов в код-ревью.
 
 ## Links
-- NFR: **NFR-04 «Структурированные ошибки»** — `../security-nfr/NFR.md`
-- Threat model: потоки **F1 (Client → API)**; риск **R2 «утечка деталей ошибок»** — `../threat-model/DFD.md`, `../threat-model/RISKS.md`, `../threat-model/STRIDE.md`
-- Код: `../../app/utils/errors.py`, `../../app/main.py`
-- Тесты: `../../tests/test_rfc7807.py`, `../../tests/test_errors.py`
+- NFR: `docs/security-nfr/NFR.md`
+- Threat model: `docs/threat-model/DFD.md`, `docs/threat-model/RISKS.md`, `docs/threat-model/STRIDE.md`
+- Код: `app/utils/errors.py`, `app/main.py`
+- Тесты: `tests/test_rfc7807.py`, `tests/test_errors.py`
 - PR: ветка `p05-secure-coding`
