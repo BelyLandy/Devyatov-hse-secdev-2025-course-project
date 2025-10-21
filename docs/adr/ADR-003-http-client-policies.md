@@ -1,6 +1,5 @@
 # ADR-003: Политики HTTP-клиента (таймауты, ретраи, лимиты)
 Дата: 2025-10-21
-Статус: Accepted
 
 ## Context
 Сервис делает исходящие HTTP-запросы (веб-хуки/интеграции). Нужно исключить «вечные» подвисания,
@@ -36,15 +35,14 @@
 ## Rollout plan
 1. Добавить `app/utils/http_client.py` с политиками (таймауты/ретраи/лимиты).
 2. Запретить прямые вызовы HTTP-клиента (только через wrapper) — код-ревью/линтером.
-3. Добавить тесты с моками: таймаут → маппинг в RFC7807; ретраи с backoff.
+3. Добавить тесты с моками: таймаут -> маппинг в RFC7807; ретраи с backoff.
 4. Включить счётчики (ретраи/таймауты) и логирование с `correlation_id`.
 5. Обновить README/доки по использованию wrapper-а.
 6. Добавлен каркас app/utils/http_client.py; перевести исходящие вызовы на него.
 
 ## Links
-- NFR: **NFR-11 «Политики исходящих HTTP»** — см. `../security-nfr/NFR.md`
-- Threat model: потоки **F2 (Service → External API)**; риск **R3 «зависание исходящих запросов»** —
-  `../threat-model/DFD.md`, `../threat-model/RISKS.md`, `../threat-model/STRIDE.md`
-- Код: `../../app/utils/errors.py` (RFC7807 маппинг), `../../app/utils/http_client.py` (wrapper, будет добавлен)
-- Тесты: `../../tests/test_errors.py` (маппинг), `../../tests/test_http_policies.py` (ретраи/таймауты, будет добавлен)
+- NFR: `docs/security-nfr/NFR.md`
+- Threat model: `docs/threat-model/DFD.md`, `docs/threat-model/RISKS.md`, `docs/threat-model/STRIDE.md`
+- Код: `app/utils/errors.py` (RFC7807 маппинг), `app/utils/http_client.py` (wrapper, будет добавлен)
+- Тесты: `tests/test_errors.py` (маппинг), `tests/test_http_policies.py` (ретраи/таймауты, будет добавлен)
 - Связанные ADR: `ADR-001-rfc7807-errors.md`
