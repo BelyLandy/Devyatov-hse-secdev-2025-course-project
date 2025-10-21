@@ -12,3 +12,5 @@
 | NFR-08 | TASK-08: rate limit write-эндпойнтов                   | P3        | P04               |
 | NFR-09 | TASK-09: CORS allow-list                               | P3        | P04               |
 | NFR-10 | TASK-10: права доступа к app.db                        | P3        | P04               |
+| NFR-11 | TASK-11: http client policies | P2 | P05 |
+
