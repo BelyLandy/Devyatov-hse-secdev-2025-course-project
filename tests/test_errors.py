@@ -1,4 +1,3 @@
-# tests/test_errors.py
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -15,7 +14,7 @@ def test_not_found_item():
     )
     assert body["title"] == "Not Found"
     assert body["status"] == 404
-    assert body["detail"]  # есть текстовое описание
+    assert body["detail"]
     assert isinstance(body["correlation_id"], str) and len(body["correlation_id"]) > 0
 
 

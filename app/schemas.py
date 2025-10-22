@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ErrorResponse(BaseModel):
@@ -12,6 +12,7 @@ class ErrorResponse(BaseModel):
 
 
 class ItemBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=120)
     impact: int = Field(ge=1, le=10)
     effort: int = Field(ge=1, le=10)
@@ -31,6 +32,7 @@ class ItemCreate(ItemBase):
 
 
 class ItemUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     title: Optional[str] = Field(None, min_length=1, max_length=120)
     impact: Optional[int] = Field(None, ge=1, le=10)
     effort: Optional[int] = Field(None, ge=1, le=10)

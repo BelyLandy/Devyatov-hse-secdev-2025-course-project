@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, func, select
 
 from ...db import session_scope
-from ...errors import forbidden, not_found
+from ...errors import forbidden, not_found, validation_error
 from ...models import Item
 from ...schemas import ItemCreate, ItemOut, ItemUpdate, SortField
 from ..deps import get_current_user
@@ -76,7 +76,10 @@ def list_items(
     label: str | None = None,
 ):
     with session_scope() as db:
-        q = select(Item)  # <-- инициализация запроса
+        q = select(Item)
+
+        if label is not None and len(label) > 24:
+            raise validation_error("label too long", {"label": "max length is 24"})
 
         if user["role"] != "admin":
             q = q.where(Item.owner_id == user["id"])
@@ -84,7 +87,6 @@ def list_items(
         if label:
             q = q.where(func.instr(Item.labels, label) > 0)
 
-        # сортировка
         if sort == "score":
             q = q.order_by((Item.impact / func.nullif(Item.effort, 0)).asc())
         elif sort == "-score":
