@@ -1,10 +1,12 @@
+# app/main.py
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.utils.rfc7807 import problem
 
 from .api.routers import items as items_router
 from .db import Base, engine, session_scope
@@ -19,49 +21,82 @@ app.include_router(items_router.router)
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404:
-        return JSONResponse(status_code=404, content={"error": {"code": "not_found"}})
+        return problem(
+            404,
+            "Not Found",
+            "Resource not found",
+            type_="about:blank#not-found",
+        )
+    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return problem(
+        exc.status_code,
+        "HTTP Error",
+        detail or "Request failed",
+        type_="about:blank#http-error",
+    )
 
-    payload = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
-    return JSONResponse(status_code=exc.status_code, content=payload)
+
+@app.exception_handler(HTTPException)
+async def fastapi_http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code == 404:
+        return problem(
+            404,
+            "Not Found",
+            "Resource not found",
+            type_="about:blank#not-found",
+        )
+    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return problem(
+        exc.status_code,
+        "HTTP Error",
+        detail or "Request failed",
+        type_="about:blank#http-error",
+    )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    details = []
+    errors = []
     for e in exc.errors():
         item = dict(e)
         if "ctx" in item and isinstance(item["ctx"], dict) and "error" in item["ctx"]:
             item["ctx"] = {**item["ctx"], "error": str(item["ctx"]["error"])}
-        details.append(item)
+        errors.append(item)
 
-    return JSONResponse(
-        status_code=422,
-        content={"error": {"code": "validation_error", "details": details}},
+    return problem(
+        422,
+        "Validation Error",
+        "Request validation failed",
+        type_="about:blank#validation-error",
+        extras={"errors": errors},
     )
 
 
-@app.get("/items/{item_id}")
-def compat_get_item(item_id: int):
-    raise HTTPException(status_code=404)
-
-
-@app.post("/items")
-def compat_create_item(name: str = Query(..., min_length=1)):
-    return {"ok": True, "name": name}
+@app.exception_handler(ValueError)
+async def value_error_handler(_: Request, exc: ValueError):
+    return problem(400, "Bad Request", str(exc), type_="about:blank#value-error")
 
 
 @app.exception_handler(Exception)
 async def default_handler(request: Request, exc: Exception):
     if isinstance(exc, HTTPException):
         raise exc
-    return JSONResponse(
-        status_code=500,
-        content={
-            "code": "INTERNAL_ERROR",
-            "message": "Unexpected error",
-            "details": {},
-        },
+    return problem(
+        500,
+        "Internal Server Error",
+        "Unexpected error",
+        type_="about:blank#internal-error",
     )
+
+
+@app.get("/items/{item_id}")
+def compat_get_item(item_id: int):
+    raise HTTPException(status_code=404, detail="item not found")
+
+
+@app.post("/items")
+def compat_create_item(name: str = Query(..., min_length=1)):
+    return {"ok": True, "name": name}
 
 
 @app.get("/health")
