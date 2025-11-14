@@ -13,10 +13,10 @@ class Item(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
-    impact: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..10
-    effort: Mapped[int] = mapped_column(Integer, nullable=False)  # 1..10
+    impact: Mapped[int] = mapped_column(Integer, nullable=False)
+    effort: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    labels: Mapped[str] = mapped_column(String(255), default="")  # "a,b,c"
+    labels: Mapped[str] = mapped_column(String(255), default="")
     owner_id: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
