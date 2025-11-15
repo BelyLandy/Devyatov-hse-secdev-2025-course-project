@@ -27,7 +27,7 @@ uvicorn app.main:app --reload
 # Swagger: http://127.0.0.1:8000/docs
 ```
 
-База локально: файл `app.db` в корне проекта.  
+База локально: файл `app.db` в корне проекта.
 В контейнере: файл БД монтируется в volume по пути `/data/app.db`.
 
 ---
@@ -49,8 +49,8 @@ uvicorn app.main:app --reload
 * `GET    /api/v1/items/{id}` - получить (владелец или `admin`)
 * `PATCH  /api/v1/items/{id}` - обновить (владелец или `admin`)
 * `DELETE /api/v1/items/{id}` - удалить (владелец или `admin`)
-* `GET    /api/v1/items?limit=&offset=&sort=&label=` - список  
-  где `sort ∈ {score,-score,created_at,-created_at,impact,-impact,effort,-effort}`,  
+* `GET    /api/v1/items?limit=&offset=&sort=&label=` - список
+  где `sort ∈ {score,-score,created_at,-created_at,impact,-impact,effort,-effort}`,
   `label` - необязательный фильтр; длина метки <= 24 символов.
 
 Служебные:
@@ -184,7 +184,7 @@ pre-commit run --all-files
 pytest -q
 ```
 
-CI (GitHub Actions): установка зависимостей -> ruff/black/isort (check) -> pytest -> pre-commit.  
+CI (GitHub Actions): установка зависимостей -> ruff/black/isort (check) -> pytest -> pre-commit.
 Проверки обязательны для ветки `main`.
 
 ---
@@ -203,7 +203,7 @@ CI (GitHub Actions): установка зависимостей -> ruff/black/i
 - Усиление: `cap_drop: [ALL]`, `security_opt: ["no-new-privileges:true"]`, `ulimits: { nofile: 4096 }`.
 
 ### Переменные окружения
-- `DB_PATH` - путь к базе (по умолчанию `/data/app.db` внутри контейнера).  
+- `DB_PATH` - путь к базе (по умолчанию `/data/app.db` внутри контейнера).
   В compose это уже задано: `APP_DB_PATH=/data/app.db` или `DB_PATH=/data/app.db` (в зависимости от кода).
 
 ### Сборка и запуск
