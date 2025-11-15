@@ -1,16 +1,35 @@
 from __future__ import annotations
 
 import os
-from contextlib import contextmanager
+import tempfile
 from pathlib import Path
+from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DB_PATH = os.getenv("DB_PATH", "/data/app.db")
 
-Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+def _choose_db_path() -> str:
+    env_path = os.getenv("DB_PATH")
+    if env_path:
+        p = Path(env_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return str(p)
+
+    for candidate in ("/data/app.db", str(Path.cwd() / "app.db")):
+        try:
+            Path(candidate).parent.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except PermissionError:
+            continue
+
+    tmp = Path(tempfile.gettempdir()) / "idea-backlog-app.db"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    return str(tmp)
+
+
+DB_PATH = _choose_db_path()
 
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
