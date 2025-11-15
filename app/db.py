@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 import tempfile
-from pathlib import Path
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine
