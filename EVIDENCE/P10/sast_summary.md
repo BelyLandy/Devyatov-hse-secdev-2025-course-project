@@ -1,15 +1,16 @@
-# P10 SAST & Secrets summary (local triage)
+# P10 SAST & Secrets summary (triage)
 
-- Commit: `7bc0654`
+- Commit: `cc41f33ef119713b7937ff0d0beaf022e1c9b2b3`
+- Run: https://github.com/BelyLandy/Devyatov-hse-secdev-2025-course-project/actions/runs/20229567123
 
 ## Semgrep
-- Total: 0
+- Total findings: 0
 - By level: `{}`
-
-## Gitleaks
-- Total: 0
 - Top rules: `[]`
 
-## Notes
-- Semgrep: профиль `p/ci` + кастом-правила `security/semgrep/rules.yml`.
-- Gitleaks: конфиг `security/.gitleaks.toml`; фиктивный JWT в `tests/fixtures/dummy_jwt.txt` в allowlist точечно.
+## Gitleaks
+- Total findings: 0
+- Top rules: `[]`
+
+## Next steps
+- Находок нет. Держим правила в актуальном состоянии; при появлении находок — фикс/ротация секретов, либо точечный allowlist c обоснованием.

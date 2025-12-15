@@ -10,6 +10,8 @@ on:
       - "pyproject.toml"
       - "Dockerfile"
       - "docker-compose*.yml"
+      - "compose.yaml"
+      - "security/zap/**"
       - ".github/workflows/ci-p11-dast.yml"
   pull_request:
     paths:
@@ -19,6 +21,8 @@ on:
       - "pyproject.toml"
       - "Dockerfile"
       - "docker-compose*.yml"
+      - "compose.yaml"
+      - "security/zap/**"
       - ".github/workflows/ci-p11-dast.yml"
 
 permissions:
@@ -32,21 +36,44 @@ jobs:
   dast_p11:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     env:
       DAST_HOST: "localhost"
       DAST_PORT: "8000"
-      DAST_HEALTH_PRIMARY: "/health"
+      DAST_HEALTH_PRIMARY: "/docs"
+      DAST_HEALTH_SECOND: "/health"
       DAST_HEALTH_FALLBACK: "/healthz"
-      DAST_TARGET: "http://localhost:8000"
+      DAST_TARGET: "http://localhost:8000/docs"
+      ZAP_TIME_MIN: "3"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure evidence dirs
-        run: mkdir -p EVIDENCE/P11
+      - name: Ensure evidence dirs and ZAP defaults
+        run: |
+          set -e
+          mkdir -p EVIDENCE/P11 .zap
+          if [ ! -f .zap/rules.tsv ]; then
+            cat > .zap/rules.tsv << 'EOF'
 
-      - name: Setup Python
+10049	WARN
+
+10035	WARN
+
+10038	WARN
+EOF
+          fi
+          if [ ! -f .zap/exclude.txt ]; then
+
+            : > .zap/exclude.txt
+          fi
+          if [ ! -f security/zap/baseline.conf ]; then
+            mkdir -p security/zap
+            printf '' > security/zap/baseline.conf
+          fi
+
+      - name: Setup Python (fallback path)
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -55,7 +82,7 @@ jobs:
         run: |
           set -e
           MODE=""
-          if ls docker-compose*.yml >/dev/null 2>&1; then
+          if ls docker-compose*.yml >/dev/null 2>&1 || [ -f compose.yaml ]; then
             MODE="compose"
             docker compose up -d --build
           elif [ -f Dockerfile ]; then
@@ -67,39 +94,59 @@ jobs:
             MODE="uvicorn"
             python -m pip install --upgrade pip
             if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+            pip install uvicorn fastapi || true
             uvicorn app.main:app --host 0.0.0.0 --port "${DAST_PORT}" &
           fi
           echo "${MODE}" > .p11_mode
+
           timeout 120 bash -c '
             until curl -fsS "http://localhost:'"${DAST_PORT}"'${DAST_HEALTH_PRIMARY}" \
+              || curl -fsS "http://localhost:'"${DAST_PORT}"'${DAST_HEALTH_SECOND}" \
               || curl -fsS "http://localhost:'"${DAST_PORT}"'${DAST_HEALTH_FALLBACK}";
-            do sleep 2; done
+            do
+              echo "app not ready yet..."; sleep 2;
+            done
           '
+          echo "Service is UP on http://localhost:${DAST_PORT}"
 
-      - name: ZAP Baseline
-        env:
-          ZAP_TIME_MIN: "5"
+      - name: Prepare ZAP options
+        id: zapopts
         run: |
           set -e
           EXCLUDE=$(tr '\n' '|' < .zap/exclude.txt | sed 's/|$//' || true)
-          ZAP_Z_OPTS=""
           if [ -n "$EXCLUDE" ]; then
-            ZAP_Z_OPTS="-config spider.excludeRegex=${EXCLUDE}"
+            echo "zopts=-config spider.excludeRegex=${EXCLUDE}" >> "$GITHUB_OUTPUT"
+          else
+            echo "zopts=" >> "$GITHUB_OUTPUT"
           fi
 
-          docker run --rm --network host -v "$PWD:/zap/wrk" owasp/zap2docker-stable \
+      - name: Run ZAP Baseline
+        run: |
+          set -e
+          docker run --rm --network host -v "$PWD:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
               -t "${DAST_TARGET}" \
               -m "${ZAP_TIME_MIN}" \
+              -c "/zap/wrk/.zap/rules.tsv" \
+              -g "/zap/wrk/security/zap/baseline.conf" \
               -r "zap_baseline.html" \
               -J "zap_baseline.json" \
               -x "zap_baseline.xml" \
-              -c ".zap/rules.tsv" \
               -d \
-              -z "${ZAP_Z_OPTS}" \
+              -z "${{ steps.zapopts.outputs.zopts }}" \
               || true
 
-          mv zap_baseline.* EVIDENCE/P11/ || true
+          mkdir -p EVIDENCE/P11
+          mv -f zap_baseline.* EVIDENCE/P11/ || true
+
+      - name: Collect service logs (compose only)
+        if: always()
+        run: |
+          MODE=$(cat .p11_mode 2>/dev/null || echo "")
+          if [ "$MODE" = "compose" ]; then
+            docker compose ps || true
+            docker compose logs --no-color > EVIDENCE/P11/app.log || true
+          fi
 
       - name: Write P11 evidence README
         run: |
@@ -107,25 +154,32 @@ jobs:
             echo "# P11 Evidence (DAST / ZAP Baseline)"
             echo
             echo "- Target: ${DAST_TARGET}"
-            echo "- Health checked: \`${DAST_HEALTH_PRIMARY}\` (fallback \`${DAST_HEALTH_FALLBACK}\`)"
+            echo "- Health checked: \`${DAST_HEALTH_PRIMARY}\` → \`${DAST_HEALTH_SECOND}\` → \`${DAST_HEALTH_FALLBACK}\`"
+            echo "- Start mode: \`$(cat .p11_mode 2>/dev/null || echo unknown)\`"
+            echo "- ZAP time budget (min): ${ZAP_TIME_MIN}"
+            echo "- Custom files:"
+            echo "  - .zap/rules.tsv (threshold overrides)"
+            echo "  - .zap/exclude.txt (regex для исключения путей из spider)"
             echo "- Artifacts:"
-            echo "  - zap_baseline.html"
-            echo "  - zap_baseline.json"
+            echo "  - zap_baseline.html / zap_baseline.json / zap_baseline.xml"
+            echo "  - app.log"
             echo
             echo "Commit: ${GITHUB_SHA}"
             echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo
-            echo "Mode: $(cat .p11_mode 2>/dev/null || echo unknown)"
           } > EVIDENCE/P11/README.md
+
+      - name: Install jq for summary
+        run: sudo apt-get update -y && sudo apt-get install -y jq
 
       - name: Job summary
         if: always()
         run: |
           MODE=$(cat .p11_mode 2>/dev/null || echo "unknown")
+          ALRTS=$(jq -r '[.site[]?.alerts[]? | select(.riskcode!="0")] | length' EVIDENCE/P11/zap_baseline.json 2>/dev/null || echo 0)
           echo "## P11 DAST (ZAP Baseline)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Target: \`${DAST_TARGET}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Health paths: \`${DAST_HEALTH_PRIMARY}\`, \`${DAST_HEALTH_FALLBACK}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Start mode: \`${MODE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Non-informational alerts: \`${ALRTS}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Artifacts: \`P11_EVIDENCE-${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stop service
@@ -144,5 +198,9 @@ jobs:
           path: |
             EVIDENCE/P11/zap_baseline.html
             EVIDENCE/P11/zap_baseline.json
+            EVIDENCE/P11/zap_baseline.xml
+            EVIDENCE/P11/app.log
             EVIDENCE/P11/README.md
+            .zap/rules.tsv
+            .zap/exclude.txt
           retention-days: 14
