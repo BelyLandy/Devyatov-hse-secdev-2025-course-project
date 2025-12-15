@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: dast-p11-${{ github.workflow }}-${{ github.ref }}
@@ -74,7 +75,19 @@ jobs:
           fi
 
           [ -f .zap/exclude.txt ] || : > .zap/exclude.txt
+
           [ -f security/zap/baseline.conf ] || : > security/zap/baseline.conf
+
+      - name: Normalize CRLF in .zap files (safety)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in .zap/rules.tsv .zap/exclude.txt; do
+            [ -f "$f" ] && sed -i 's/\r$//' "$f" || true
+          done
+
+          awk -F'\t' 'BEGIN{e=0} /^[[:space:]]*#/ || NF==0 {next} NF<3{print "bad line:" NR":" $0; e=1} END{exit e}' .zap/rules.tsv || {
+            echo "::error::.zap/rules.tsv has malformed lines"; exit 1; }
 
       - name: Setup Python (fallback path)
         uses: actions/setup-python@v5
@@ -82,8 +95,9 @@ jobs:
           python-version: "3.11"
 
       - name: Start service (compose > docker > uvicorn)
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           MODE=""
           if ls docker-compose*.yml >/dev/null 2>&1 || [ -f compose.yaml ]; then
             MODE="compose"
@@ -114,9 +128,10 @@ jobs:
 
       - name: Prepare ZAP options
         id: zapopts
+        shell: bash
         run: |
-          set -e
-          EXCLUDE=$(tr '\n' '|' < .zap/exclude.txt | sed 's/|$//' || true)
+          set -euo pipefail
+          EXCLUDE="$(tr '\n' '|' < .zap/exclude.txt | sed 's/|$//' || true)"
           if [ -n "$EXCLUDE" ]; then
             echo "zopts=-config spider.excludeRegex=${EXCLUDE}" >> "$GITHUB_OUTPUT"
           else
@@ -124,8 +139,9 @@ jobs:
           fi
 
       - name: Run ZAP Baseline
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           docker run --rm --network host -v "$PWD:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
               -t "${DAST_TARGET}" \
@@ -144,6 +160,7 @@ jobs:
 
       - name: Collect service logs (compose only)
         if: always()
+        shell: bash
         run: |
           MODE=$(cat .p11_mode 2>/dev/null || echo "")
           if [ "$MODE" = "compose" ]; then
@@ -152,12 +169,13 @@ jobs:
           fi
 
       - name: Write P11 evidence README
+        shell: bash
         run: |
           {
             echo "# P11 Evidence (DAST / ZAP Baseline)"
             echo
             echo "- Target: ${DAST_TARGET}"
-            echo "- Health checked: \`${DAST_HEALTH_PRIMARY}\` → \`${DAST_HEALTH_SECOND}\` → \`${DAST_HEALTH_FALLBACK}\`"
+            echo "- Health checked: \`${DAST_HEALTH_PRIMARY}\` -> \`${DAST_HEALTH_SECOND}\` -> \`${DAST_HEALTH_FALLBACK}\`"
             echo "- Start mode: \`$(cat .p11_mode 2>/dev/null || echo unknown)\`"
             echo "- ZAP time budget (min): ${ZAP_TIME_MIN}"
             echo "- Custom files:"
@@ -176,6 +194,7 @@ jobs:
 
       - name: Job summary
         if: always()
+        shell: bash
         run: |
           MODE=$(cat .p11_mode 2>/dev/null || echo "unknown")
           ALRTS=$(jq -r '[.site[]?.alerts[]? | select(.riskcode!="0")] | length' EVIDENCE/P11/zap_baseline.json 2>/dev/null || echo 0)
@@ -184,9 +203,48 @@ jobs:
           echo "- Start mode: \`${MODE}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Non-informational alerts: \`${ALRTS}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Artifacts: \`P11_EVIDENCE-${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: PR comment with short summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require('@actions/core');
+            const {context, github} = require('@actions/github');
+            const fs = require('fs');
+
+            let alerts = 0;
+            try {
+              const j = JSON.parse(fs.readFileSync('EVIDENCE/P11/zap_baseline.json','utf8'));
+              alerts = (j.site||[])
+                .flatMap(s => (s.alerts||[]))
+                .filter(a => a.riskcode !== '0').length;
+            } catch(e){}
+
+            const body = [
+              '<!-- p11-dast-zap -->',
+              '### P11 DAST (ZAP Baseline)',
+              `- Target: \`${process.env.DAST_TARGET}\``,
+              `- Non-informational alerts: \`${alerts}\``,
+              `- Run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+              `- Artifacts: \`P11_EVIDENCE-${process.env.GITHUB_SHA}\` (HTML/JSON/XML + app.log)`,
+            ].join('\n');
+
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const {data: comments} = await github.rest.issues.listComments({owner, repo, issue_number});
+            const prev = comments.find(c => c.body && c.body.includes('<!-- p11-dast-zap -->'));
+            if (prev) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: prev.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }
 
       - name: Stop service
         if: always()
+        shell: bash
         run: |
           MODE=$(cat .p11_mode 2>/dev/null || echo "")
           if [ "$MODE" = "compose" ]; then docker compose down -v || true; fi
