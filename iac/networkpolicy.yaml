@@ -11,6 +11,7 @@ spec:
     - Ingress
     - Egress
 
+
   ingress:
     - from:
         - namespaceSelector:
